@@ -150,6 +150,41 @@ class TestFormat:
         with pytest.raises(SQLParseError):
             sqlparse.format(s, strip_whitespace=None)
 
+    @pytest.mark.parametrize('options', [
+        {'strip_whitespace': True},
+        {'reindent': True},
+        {'reindent': True, 'comma_first': True, 'indent_columns': True,
+         'use_space_around_operators': True},
+    ])
+    @pytest.mark.parametrize('gap', ['\n', '\r\n', '\r', ' \t\n \t', '\n\n'])
+    def test_preserve_newline_before_comment(self, gap, options):
+        # issue639: a standalone comment must not join the preceding SQL line.
+        sql = 'SELECT bla,' + gap + '-- here is a comment\n-- and another\n'
+        expected = 'SELECT bla,\n-- here is a comment\n-- and another\n'
+        assert sqlparse.format(sql, **options) == expected
+
+    @pytest.mark.parametrize('options', [
+        {'strip_whitespace': True},
+        {'reindent': True},
+    ])
+    def test_preserve_inline_comment(self, options):
+        sql = 'SELECT bla, \t -- inline comment\n'
+        assert sqlparse.format(sql, **options) == 'SELECT bla, -- inline comment\n'
+
+    @pytest.mark.parametrize(('sql', 'expected'), [
+        ('SELECT (a,\n-- comment\nb)', 'SELECT (a,\n-- comment\nb)'),
+        ('SELECT a\n/* comment */', 'SELECT a\n/* comment */'),
+        ('\n \t-- comment\nSELECT a', '-- comment\nSELECT a'),
+        ('SELECT a \t /* comment */', 'SELECT a /* comment */'),
+    ])
+    def test_comment_newlines_in_groups(self, sql, expected):
+        assert sqlparse.format(sql, strip_whitespace=True) == expected
+
+    def test_strip_comment_still_collapses_preceding_newline(self):
+        sql = 'SELECT a\n-- comment\nFROM t'
+        assert sqlparse.format(sql, strip_comments=True,
+                               strip_whitespace=True) == 'SELECT a FROM t'
+
     def test_preserve_ws(self):
         # preserve at least one whitespace after subgroups
         f = lambda sql: sqlparse.format(sql, strip_whitespace=True)

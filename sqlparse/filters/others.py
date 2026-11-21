@@ -91,9 +91,19 @@ class StripWhitespaceFilter:
     def _stripws_default(tlist):
         last_was_ws = False
         is_first_char = True
+        first_ws = None
+        has_newline = False
         for token in tlist.tokens:
             if token.is_whitespace:
+                if not last_was_ws:
+                    first_ws = token
+                    has_newline = False
+                has_newline = has_newline or '\n' in token.value or '\r' in token.value
                 token.value = '' if last_was_ws or is_first_char else ' '
+            elif (last_was_ws and has_newline and first_ws.value
+                  and (token.ttype in T.Comment or isinstance(token, sql.Comment))):
+                # Keep standalone comments on a separate line (issue639).
+                first_ws.value = '\n'
             last_was_ws = token.is_whitespace
             is_first_char = False
 
